@@ -21,7 +21,9 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
@@ -33,6 +35,7 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
@@ -65,6 +68,9 @@ public final class FaceTrackerActivity extends AppCompatActivity {
     private File dir;
     private File imageFile;
     private EditText mPassEdittext;
+    private File externalStoragePublicDirectory;
+    private File photo;
+    private String mPassWord;
 
     //==============================================================================================
     // Activity Methods
@@ -173,7 +179,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         }
 
         mCameraSource = new CameraSource.Builder(context, detector)
-                .setRequestedPreviewSize(640, 480)
+                .setRequestedPreviewSize(1200, 1200)
                 .setFacing(CameraSource.CAMERA_FACING_FRONT)
                 .setRequestedFps(30.0f)
                 .build();
@@ -288,6 +294,19 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         }
     }
 
+    public void onClickLogin(View view) {
+        mPassWord = mPassEdittext.getText().toString();
+        if (mPassWord.length() > 3) {
+            Intent intent = new Intent(this, MakeTransactionActivity.class);
+            Uri mPhotoUri = Uri.fromFile(photo);
+            intent.putExtra(Intent.EXTRA_TEXT, mPhotoUri.toString());
+            startActivity(intent);
+
+        } else {
+            Toast.makeText(this, "Password must be atleast 3 characters", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     //==============================================================================================
     // Graphic Face Tracker
     //==============================================================================================
@@ -371,10 +390,10 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
             // Write to SD Card
             try {
-                File externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/hello");
+                externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/hello");
                 if (!externalStoragePublicDirectory.exists())
                     externalStoragePublicDirectory.mkdir();
-                File photo = new File(externalStoragePublicDirectory,
+                photo = new File(externalStoragePublicDirectory,
                         "JPEG_" + System.currentTimeMillis() + ".jpg");
 
                 FileOutputStream fos = new FileOutputStream(photo.getPath());
@@ -390,5 +409,10 @@ public final class FaceTrackerActivity extends AppCompatActivity {
             return null;
         }
 
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+            Toast.makeText(FaceTrackerActivity.this, "Photo Preview Available @ " + photo.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+        }
     }
 }

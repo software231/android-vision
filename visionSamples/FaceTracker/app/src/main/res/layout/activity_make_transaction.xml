@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/topLayout"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/activity_make_transaction"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:keepScreenOn="true"
-    android:orientation="vertical">
+    tools:context="com.google.android.gms.samples.vision.face.facetracker.MakeTransactionActivity">
 
     <com.google.android.gms.samples.vision.face.facetracker.ui.camera.CameraSourcePreview
         android:id="@+id/preview"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:background="@android:color/transparent">
 
@@ -27,26 +26,21 @@
         android:orientation="vertical">
 
         <EditText
-            android:id="@+id/username"
+            android:id="@+id/creditcard_number"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Username"
+            android:hint="Card Number"
             android:textColor="@android:color/black"
             android:textColorHint="@android:color/black" />
 
         <EditText
-            android:id="@+id/password"
+            android:id="@+id/creditcardcvv_number"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="password"
+            android:layout_below="@+id/creditcard_number"
+            android:hint="Card CVV"
             android:textColor="@android:color/black"
             android:textColorHint="@android:color/black" />
-
-        <Button
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:onClick="onClickLogin"
-            android:text="login" />
     </LinearLayout>
 
 </RelativeLayout>
