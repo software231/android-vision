@@ -7,6 +7,9 @@
 
     <uses-feature android:name="android.hardware.camera" />
 
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
     <uses-permission android:name="android.permission.CAMERA" />
 
     <uses-sdk
@@ -17,11 +20,12 @@
         android:allowBackup="true"
         android:hardwareAccelerated="true"
         android:icon="@drawable/icon"
-        android:theme="@style/Theme.AppCompat"
-        android:label="FaceTracker">
+        android:label="FaceTracker"
+        android:theme="@style/Theme.AppCompat">
 
-        <meta-data android:name="com.google.android.gms.version"
-            android:value="@integer/google_play_services_version"/>
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
 
         <meta-data
             android:name="com.google.android.gms.vision.DEPENDENCIES"
@@ -31,8 +35,8 @@
             android:name="com.google.android.gms.samples.vision.face.facetracker.FaceTrackerActivity"
             android:icon="@drawable/icon"
             android:label="Face Tracker"
-            android:theme="@style/Theme.AppCompat.NoActionBar"
-            android:screenOrientation="fullSensor">
+            android:screenOrientation="fullSensor"
+            android:theme="@style/Theme.AppCompat">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

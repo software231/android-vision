@@ -22,24 +22,33 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
+import android.widget.EditText;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.samples.vision.face.facetracker.ui.camera.CameraSourcePreview;
+import com.google.android.gms.samples.vision.face.facetracker.ui.camera.GraphicOverlay;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.MultiProcessor;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
-import com.google.android.gms.samples.vision.face.facetracker.ui.camera.CameraSourcePreview;
-import com.google.android.gms.samples.vision.face.facetracker.ui.camera.GraphicOverlay;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+
+import static com.google.android.gms.samples.vision.face.facetracker.R.id.preview;
 
 /**
  * Activity for the face tracker app.  This app detects faces with the rear facing camera, and draws
@@ -47,15 +56,15 @@ import java.io.IOException;
  */
 public final class FaceTrackerActivity extends AppCompatActivity {
     private static final String TAG = "FaceTracker";
-
-    private CameraSource mCameraSource = null;
-
-    private CameraSourcePreview mPreview;
-    private GraphicOverlay mGraphicOverlay;
-
     private static final int RC_HANDLE_GMS = 9001;
     // permission request codes need to be < 256
     private static final int RC_HANDLE_CAMERA_PERM = 2;
+    private CameraSource mCameraSource = null;
+    private CameraSourcePreview mPreview;
+    private GraphicOverlay mGraphicOverlay;
+    private File dir;
+    private File imageFile;
+    private EditText mPassEdittext;
 
     //==============================================================================================
     // Activity Methods
@@ -69,7 +78,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         super.onCreate(icicle);
         setContentView(R.layout.main);
 
-        mPreview = (CameraSourcePreview) findViewById(R.id.preview);
+        mPreview = (CameraSourcePreview) findViewById(preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
 
         // Check for the camera permission before accessing the camera.  If the
@@ -80,6 +89,27 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         } else {
             requestCameraPermission();
         }
+
+        mPassEdittext = (EditText) findViewById(R.id.password);
+        mPassEdittext.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (count == 3) {
+                    startCameraSource();
+                    //mPassEdittext.addTextChangedListener(null);
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+
+            }
+        });
     }
 
     /**
@@ -144,7 +174,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
         mCameraSource = new CameraSource.Builder(context, detector)
                 .setRequestedPreviewSize(640, 480)
-                .setFacing(CameraSource.CAMERA_FACING_BACK)
+                .setFacing(CameraSource.CAMERA_FACING_FRONT)
                 .setRequestedFps(30.0f)
                 .build();
     }
@@ -156,7 +186,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-        startCameraSource();
+
     }
 
     /**
@@ -301,6 +331,15 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
             mOverlay.add(mFaceGraphic);
             mFaceGraphic.updateFace(face);
+            mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
+                @Override
+                public void onPictureTaken(byte[] bytes) {
+                    new SaveImageTask().execute(bytes);
+                    mPreview.stop();
+                }
+
+            });
+
         }
 
         /**
@@ -321,5 +360,35 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         public void onDone() {
             mOverlay.remove(mFaceGraphic);
         }
+    }
+
+
+    private class SaveImageTask extends AsyncTask<byte[], Void, Void> {
+
+        @Override
+        protected Void doInBackground(byte[]... data) {
+            FileOutputStream outStream = null;
+
+            // Write to SD Card
+            try {
+                File externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/hello");
+                if (!externalStoragePublicDirectory.exists())
+                    externalStoragePublicDirectory.mkdir();
+                File photo = new File(externalStoragePublicDirectory,
+                        "JPEG_" + System.currentTimeMillis() + ".jpg");
+
+                FileOutputStream fos = new FileOutputStream(photo.getPath());
+
+                fos.write(data[0]);
+                fos.close();
+            } catch (java.io.IOException e) {
+                Log.e("PictureDemo", "Exception in photoCallback", e);
+            } finally {
+
+            }
+
+            return null;
+        }
+
     }
 }
