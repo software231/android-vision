@@ -126,7 +126,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
     private void requestCameraPermission() {
         Log.w(TAG, "Camera permission is not granted. Requesting permission");
 
-        final String[] permissions = new String[]{Manifest.permission.CAMERA};
+        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
 
         if (!ActivityCompat.shouldShowRequestPermissionRationale(this,
                 Manifest.permission.CAMERA)) {
@@ -390,7 +390,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
             // Write to SD Card
             try {
-                externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/hello");
+                externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/FaceIdentificationPath");
                 if (!externalStoragePublicDirectory.exists())
                     externalStoragePublicDirectory.mkdir();
                 photo = new File(externalStoragePublicDirectory,

@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
+        android:name=".FaceDetectionApplicationClass"
         android:allowBackup="true"
         android:hardwareAccelerated="true"
         android:icon="@drawable/icon"
@@ -29,7 +30,7 @@
             android:name=".FaceTrackerActivity"
             android:icon="@drawable/icon"
             android:label="Face Tracker"
-            android:screenOrientation="fullSensor"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -37,7 +38,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".MakeTransactionActivity"></activity>
+        <activity
+            android:name=".MakeTransactionActivity"
+            android:screenOrientation="portrait" />
     </application>
 
 </manifest>

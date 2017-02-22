@@ -6,6 +6,7 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -18,6 +19,7 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -29,29 +31,37 @@ import com.google.android.gms.vision.MultiProcessor;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
+import com.microsoft.projectoxford.face.FaceServiceClient;
+import com.microsoft.projectoxford.face.contract.VerifyResult;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.UUID;
 
 import static com.google.android.gms.samples.vision.face.facetracker.R.id.preview;
 
-public class MakeTransactionActivity extends AppCompatActivity implements FilePaths {
+public class MakeTransactionActivity extends AppCompatActivity {
 
     private static final String TAG = MakeTransactionActivity.class.getName();
     private static final int RC_HANDLE_GMS = 9001;
     // permission request codes need to be < 256
     private static final int RC_HANDLE_CAMERA_PERM = 2;
-    private Uri mPhotoPath;
-    private EditText mCreditCardEditText;
+    private Uri mPhotoPath1;
+    private Uri mPhotoPath2;
     private EditText mCreditCardCVVEditText;
     private CameraSource mCameraSource = null;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
-    private EditText mPassEdittext;
     private File externalStoragePublicDirectory;
     private File photo;
-    private String mPassWord;
+    private com.microsoft.projectoxford.face.contract.Face[] mFace2;
+    private com.microsoft.projectoxford.face.contract.Face[] mFace1;
+    private int mCount = 0;
+    private EditText mCreditCardEditText;
 
 
     @Override
@@ -121,7 +131,9 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
 
     private void getExtraDataFromIntent() {
         Intent intent = getIntent();
-        mPhotoPath = Uri.parse(intent.getStringExtra(Intent.EXTRA_TEXT));
+        mPhotoPath1 = Uri.parse(intent.getStringExtra(Intent.EXTRA_TEXT));
+        Bitmap bitmap1 = HelperClass.loadSizeLimitedBitmapFromUri(mPhotoPath1, getContentResolver());
+        if (bitmap1 != null) detect(bitmap1, 1);
     }
 
     private void createCameraSource() {
@@ -130,10 +142,12 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
         FaceDetector detector = new FaceDetector.Builder(context)
                 .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
                 .build();
+        GraphicFaceTrackerFactory graphics = new GraphicFaceTrackerFactory();
+        MultiProcessor<Face> googleProcess = new MultiProcessor.Builder<>(graphics).build();
 
-        detector.setProcessor(
-                new MultiProcessor.Builder<>(new GraphicFaceTrackerFactory())
-                        .build());
+        detector.setProcessor(googleProcess);
+        // new MultiProcessor.Builder<>(new GraphicFaceTrackerFactory())
+        //        .build());
 
         if (!detector.isOperational()) {
             // Note: The first time that an app using face API is installed on a device, GMS will
@@ -157,7 +171,7 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
     private void requestCameraPermission() {
         Log.w(TAG, "Camera permission is not granted. Requesting permission");
 
-        final String[] permissions = new String[]{Manifest.permission.CAMERA};
+        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
 
         if (!ActivityCompat.shouldShowRequestPermissionRationale(this,
                 Manifest.permission.CAMERA)) {
@@ -181,14 +195,145 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
                 .show();
     }
 
-    @Override
-    public void getFirstFile() {
+    public void submitButton(View view) {
+        Bitmap bitmap2 = HelperClass.loadSizeLimitedBitmapFromUri(mPhotoPath2, getContentResolver());
+        if (bitmap2 != null) detect(bitmap2, 2);
 
     }
 
-    @Override
-    public void getSecondFile() {
+    private void detect(Bitmap bitmap, int index) {
+        // Put the image into an input stream for detection.
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, output);
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(output.toByteArray());
 
+        //Start a background task to detect faces in the image.
+        new DetectionTask(index).execute(inputStream);
+
+
+        //Set the status to show that detection starts.
+        //setInfo("Detecting...");
+    }
+
+    private void setUiAfterDetection(com.microsoft.projectoxford.face.contract.Face[] result, int mIndex) {
+        if (mIndex == 1) {
+            mFace1 = result;
+        } else if (mIndex == 2) {
+            mFace2 = result;
+            startVerification();
+        }
+    }
+
+    private void startVerification() {
+        new VerificationTask(mFace1[0].faceId, mFace2[0].faceId).execute();
+    }
+
+    // Background task of face detection.
+    private class DetectionTask extends AsyncTask<InputStream, String, com.microsoft.projectoxford.face.contract.Face[]> {
+
+        private final int mIndex;
+
+        DetectionTask(int index) {
+            mIndex = index;
+        }
+
+        @Override
+        protected com.microsoft.projectoxford.face.contract.Face[] doInBackground(InputStream... params) {
+            // Get an instance of face service client to detect faces in image.
+            FaceServiceClient faceServiceClient = FaceDetectionApplicationClass.getFaceServiceClient();
+            try {
+                publishProgress("Detecting...");
+
+                // Start detection.
+                return faceServiceClient.detect(
+                        params[0],  /* Input stream of image to detect */
+                        true,       /* Whether to return face ID */
+                        false,       /* Whether to return face landmarks */
+                        /* Which face attributes to analyze, currently we support:
+                           age,gender,headPose,smile,facialHair */
+                        null);
+            } catch (Exception e) {
+                publishProgress(e.getMessage());
+                return null;
+            }
+        }
+
+        @Override
+        protected void onPreExecute() {
+            //progressDialog.show();
+            //addLog("Request: Detecting in image" + mIndex);
+        }
+
+        @Override
+        protected void onProgressUpdate(String... progress) {
+            //progressDialog.setMessage(progress[0]);
+            //setInfo(progress[0]);
+        }
+
+        @Override
+        protected void onPostExecute(com.microsoft.projectoxford.face.contract.Face[] result) {
+            // Show the result on screen when detection is done.
+            if (result != null) setUiAfterDetection(result, mIndex);
+        }
+
+    }
+
+    private class VerificationTask extends AsyncTask<Void, String, VerifyResult> {
+        // The IDs of two face to verify.
+        private UUID mFaceId0;
+        private UUID mFaceId1;
+
+        VerificationTask(UUID faceId0, UUID faceId1) {
+            mFaceId0 = faceId0;
+            mFaceId1 = faceId1;
+        }
+
+        @Override
+        protected VerifyResult doInBackground(Void... params) {
+            // Get an instance of face service client to detect faces in image.
+            FaceServiceClient faceServiceClient = FaceDetectionApplicationClass.getFaceServiceClient();
+            try {
+                publishProgress("Verifying...");
+
+                // Start verification.
+                return faceServiceClient.verify(
+                        mFaceId0,      /* The first face ID to verify */
+                        mFaceId1);     /* The second face ID to verify */
+            } catch (Exception e) {
+                publishProgress(e.getMessage());
+                return null;
+            }
+        }
+
+        @Override
+        protected void onPreExecute() {
+            // progressDialog.show();
+            //addLog("Request: Verifying face " + mFaceId0 + " and face " + mFaceId1);
+        }
+
+        @Override
+        protected void onProgressUpdate(String... progress) {
+            //progressDialog.setMessage(progress[0]);
+            //setInfo(progress[0]);
+        }
+
+        @Override
+        protected void onPostExecute(VerifyResult result) {
+            if (result != null) {
+                Log.i(TAG, "Response: Success. Face " + mFaceId0 + " and face "
+                        + mFaceId1 + (result.isIdentical ? " " : " don't ")
+                        + "belong to the same person");
+
+                TextView tv = (TextView) findViewById(R.id.text_output);
+                tv.setText("Face1 " + " and Face2 "
+                        + (result.isIdentical ? " " : " don't ")
+                        + "belong to the same person");
+                tv.append("\n" + "face matching Confidence is around  " + result.confidence);
+            }
+
+            // Show the result on screen when verification is done.
+            // setUiAfterVerification(result);
+        }
     }
 
     private class GraphicFaceTrackerFactory implements MultiProcessor.Factory<Face> {
@@ -235,6 +380,7 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
 
             });
 
+
         }
 
         /**
@@ -266,7 +412,7 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
 
             // Write to SD Card
             try {
-                externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/hello");
+                externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/FaceIdentificationPath");
                 if (!externalStoragePublicDirectory.exists())
                     externalStoragePublicDirectory.mkdir();
                 photo = new File(externalStoragePublicDirectory,
@@ -289,6 +435,7 @@ public class MakeTransactionActivity extends AppCompatActivity implements FilePa
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
             Toast.makeText(MakeTransactionActivity.this, "Photo Preview Available @ " + photo.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+            mPhotoPath2 = Uri.fromFile(photo);
         }
     }
 }
