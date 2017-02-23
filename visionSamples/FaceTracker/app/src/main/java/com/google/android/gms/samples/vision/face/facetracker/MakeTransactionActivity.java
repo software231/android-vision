@@ -3,6 +3,7 @@ package com.google.android.gms.samples.vision.face.facetracker;
 import android.Manifest;
 import android.app.Activity;
 import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -11,14 +12,18 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -62,15 +67,23 @@ public class MakeTransactionActivity extends AppCompatActivity {
     private com.microsoft.projectoxford.face.contract.Face[] mFace1;
     private int mCount = 0;
     private EditText mCreditCardEditText;
+    private ProgressDialog progressDialog;
+    private ImageView mphoto1;
+    private ImageView mphoto2;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_make_transaction);
+        setUpIds();
         getExtraDataFromIntent();
         checkPermission();
-        setUpIds();
+
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setTitle("Please wait");
+
+
     }
 
     private void startCameraSource() {
@@ -109,7 +122,9 @@ public class MakeTransactionActivity extends AppCompatActivity {
         mCreditCardCVVEditText = (EditText) findViewById(R.id.creditcardcvv_number);
         mPreview = (CameraSourcePreview) findViewById(preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
-        mCreditCardCVVEditText.addTextChangedListener(new TextWatcher() {
+        mphoto1 = (ImageView) findViewById(R.id.photo1);
+        mphoto2 = (ImageView) findViewById(R.id.photo2);
+        mCreditCardEditText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
 
@@ -132,8 +147,15 @@ public class MakeTransactionActivity extends AppCompatActivity {
     private void getExtraDataFromIntent() {
         Intent intent = getIntent();
         mPhotoPath1 = Uri.parse(intent.getStringExtra(Intent.EXTRA_TEXT));
-        Bitmap bitmap1 = HelperClass.loadSizeLimitedBitmapFromUri(mPhotoPath1, getContentResolver());
-        if (bitmap1 != null) detect(bitmap1, 1);
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                // this will run in the main thread
+                Bitmap bitmap1 = HelperClass.loadSizeLimitedBitmapFromUri(mPhotoPath1, getContentResolver());
+                if (bitmap1 != null) detect(bitmap1, 1);
+                mphoto1.setImageBitmap(bitmap1);
+            }
+        });
     }
 
     private void createCameraSource() {
@@ -196,21 +218,35 @@ public class MakeTransactionActivity extends AppCompatActivity {
     }
 
     public void submitButton(View view) {
-        Bitmap bitmap2 = HelperClass.loadSizeLimitedBitmapFromUri(mPhotoPath2, getContentResolver());
-        if (bitmap2 != null) detect(bitmap2, 2);
+        progressDialog.show();
+        if (mCreditCardEditText.getText().toString().length() < 3) {
+            mCreditCardEditText.setError("Cannot be empty");
+            return;
+        }
+
+        if (TextUtils.isEmpty(mCreditCardCVVEditText.getText().toString())) {
+            mCreditCardCVVEditText.setError("Cannot be null");
+            return;
+        }
+        if (mCreditCardCVVEditText.getText().toString().length() >= 2) {
+
+        }
 
     }
 
-    private void detect(Bitmap bitmap, int index) {
-        // Put the image into an input stream for detection.
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, output);
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(output.toByteArray());
+    private void detect(final Bitmap bitmap, final int index) {
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {  // Put the image into an input stream for detection.
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, output);
+                ByteArrayInputStream inputStream = new ByteArrayInputStream(output.toByteArray());
 
-        //Start a background task to detect faces in the image.
-        new DetectionTask(index).execute(inputStream);
+                //Start a background task to detect faces in the image.
+                new DetectionTask(index).execute(inputStream);
 
-
+            }
+        });
         //Set the status to show that detection starts.
         //setInfo("Detecting...");
     }
@@ -273,7 +309,9 @@ public class MakeTransactionActivity extends AppCompatActivity {
         @Override
         protected void onPostExecute(com.microsoft.projectoxford.face.contract.Face[] result) {
             // Show the result on screen when detection is done.
-            if (result != null) setUiAfterDetection(result, mIndex);
+            if (result != null) {
+                setUiAfterDetection(result, mIndex);
+            }
         }
 
     }
@@ -319,6 +357,7 @@ public class MakeTransactionActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(VerifyResult result) {
+            progressDialog.dismiss();
             if (result != null) {
                 Log.i(TAG, "Response: Success. Face " + mFaceId0 + " and face "
                         + mFaceId1 + (result.isIdentical ? " " : " don't ")
@@ -371,14 +410,23 @@ public class MakeTransactionActivity extends AppCompatActivity {
         public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
             mOverlay.add(mFaceGraphic);
             mFaceGraphic.updateFace(face);
-            mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
-                @Override
-                public void onPictureTaken(byte[] bytes) {
-                    new SaveImageTask().execute(bytes);
-                    mPreview.stop();
-                }
+            try {
+                mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
+                    @Override
+                    public void onPictureTaken(byte[] bytes) {
+                        new SaveImageTask().execute(bytes);
+                        mPreview.stop();
+                        mOverlay.postInvalidate();
+                        mFaceGraphic.postInvalidate();
+                        mGraphicOverlay.postInvalidate();
+                        mCameraSource.release();
 
-            });
+                    }
+
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
 
         }
@@ -436,6 +484,14 @@ public class MakeTransactionActivity extends AppCompatActivity {
             super.onPostExecute(aVoid);
             Toast.makeText(MakeTransactionActivity.this, "Photo Preview Available @ " + photo.getAbsolutePath(), Toast.LENGTH_SHORT).show();
             mPhotoPath2 = Uri.fromFile(photo);
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    Bitmap bitmap2 = HelperClass.loadSizeLimitedBitmapFromUri(mPhotoPath2, getContentResolver());
+                    if (bitmap2 != null) detect(bitmap2, 2);
+                    mphoto2.setImageBitmap(bitmap2);
+                }
+            });
         }
     }
 }

@@ -23,6 +23,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -31,10 +32,12 @@ import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -65,12 +68,12 @@ public final class FaceTrackerActivity extends AppCompatActivity {
     private CameraSource mCameraSource = null;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
-    private File dir;
-    private File imageFile;
     private EditText mPassEdittext;
     private File externalStoragePublicDirectory;
     private File photo;
     private String mPassWord;
+    private EditText mUserNameET;
+    private ImageView mphoto;
 
     //==============================================================================================
     // Activity Methods
@@ -86,18 +89,15 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
         mPreview = (CameraSourcePreview) findViewById(preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
+        mphoto = (ImageView) findViewById(R.id.photo1);
 
         // Check for the camera permission before accessing the camera.  If the
         // permission is not granted yet, request permission.
-        int rc = ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
-        if (rc == PackageManager.PERMISSION_GRANTED) {
-            createCameraSource();
-        } else {
-            requestCameraPermission();
-        }
+
 
         mPassEdittext = (EditText) findViewById(R.id.password);
-        mPassEdittext.addTextChangedListener(new TextWatcher() {
+        mUserNameET = (EditText) findViewById(R.id.username);
+        mUserNameET.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
 
@@ -105,7 +105,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (count == 3) {
+                if (count == 2) {
                     startCameraSource();
                     //mPassEdittext.addTextChangedListener(null);
                 }
@@ -159,7 +159,7 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
         Context context = getApplicationContext();
         FaceDetector detector = new FaceDetector.Builder(context)
-                .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
+                .setClassificationType(FaceDetector.ACCURATE_MODE)
                 .build();
 
         detector.setProcessor(
@@ -191,7 +191,12 @@ public final class FaceTrackerActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-
+        int rc = ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
+        if (rc == PackageManager.PERMISSION_GRANTED) {
+            createCameraSource();
+        } else {
+            requestCameraPermission();
+        }
 
     }
 
@@ -296,15 +301,23 @@ public final class FaceTrackerActivity extends AppCompatActivity {
 
     public void onClickLogin(View view) {
         mPassWord = mPassEdittext.getText().toString();
+        if (TextUtils.isEmpty(mUserNameET.getText().toString())) {
+            mUserNameET.setError("Cannot be null");
+            return;
+        }
         if (mPassWord.length() > 3) {
             Intent intent = new Intent(this, MakeTransactionActivity.class);
             Uri mPhotoUri = Uri.fromFile(photo);
             intent.putExtra(Intent.EXTRA_TEXT, mPhotoUri.toString());
             startActivity(intent);
-
+            return;
         } else {
+            mPassEdittext.setError("Password must be atleast 3 characters");
             Toast.makeText(this, "Password must be atleast 3 characters", Toast.LENGTH_SHORT).show();
+            return;
         }
+
+
     }
 
     //==============================================================================================
@@ -350,14 +363,23 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
             mOverlay.add(mFaceGraphic);
             mFaceGraphic.updateFace(face);
-            mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
-                @Override
-                public void onPictureTaken(byte[] bytes) {
-                    new SaveImageTask().execute(bytes);
-                    mPreview.stop();
-                }
+            try {
+                mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
+                    @Override
+                    public void onPictureTaken(byte[] bytes) {
+                        new SaveImageTask().execute(bytes);
+                        mPreview.stop();
+                        mOverlay.postInvalidate();
+                        mFaceGraphic.postInvalidate();
+                        mGraphicOverlay.postInvalidate();
+                        mCameraSource.release();
 
-            });
+                    }
+
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
         }
 
@@ -392,7 +414,9 @@ public final class FaceTrackerActivity extends AppCompatActivity {
             try {
                 externalStoragePublicDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/FaceIdentificationPath");
                 if (!externalStoragePublicDirectory.exists())
-                    externalStoragePublicDirectory.mkdir();
+                    if (externalStoragePublicDirectory.mkdir()) {
+                        return null;
+                    }
                 photo = new File(externalStoragePublicDirectory,
                         "JPEG_" + System.currentTimeMillis() + ".jpg");
 
@@ -413,6 +437,13 @@ public final class FaceTrackerActivity extends AppCompatActivity {
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
             Toast.makeText(FaceTrackerActivity.this, "Photo Preview Available @ " + photo.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+           /* new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {*/
+            Bitmap bitmap2 = HelperClass.loadSizeLimitedBitmapFromUri(Uri.fromFile(photo), getContentResolver());
+            mphoto.setImageBitmap(bitmap2);
+              /*  }
+            });*/
         }
     }
 }
